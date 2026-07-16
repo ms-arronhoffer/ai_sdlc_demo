@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useCountUp, useTypewriter, usePrefersReducedMotion } from "./useWidgetMotion";
 
 /**
  * Agent Trace Visualizer.
  *
- * An animated, clickable timeline of a single agent run against the fictional
- * TaskFlow app. Each step is a node in the reason → act → observe loop with
- * token, latency, and cost metrics. Selecting a node reveals the raw prompt /
- * tool payload for that step. This widget is intentionally *pre-recorded* (no
- * backend) so the visualisation is deterministic and always available — the
- * live, LLM-driven experience lives in the Live Agent Playground.
+ * A cinematic, replayable timeline of a single agent run against the fictional
+ * TaskFlow app. Press play and the reason → act → observe → answer loop unfolds
+ * step by step: nodes light up in sequence, the token / latency / cost meters
+ * tick upward in real time, and the grounded answer types itself out. Every
+ * step stays clickable afterwards so you can inspect its raw payload.
+ *
+ * The run is intentionally *pre-recorded* (no backend) so the visualisation is
+ * deterministic and always available — the live, LLM-driven experience lives in
+ * the Live Agent Playground.
  */
 
 type StepKind = "reason" | "tool" | "observe" | "answer";
@@ -122,36 +126,142 @@ function stepCost(s: TraceStep): number {
   return ((s.tokensIn + s.tokensOut) / 1000) * PRICE_PER_1K;
 }
 
-export default function AgentTrace() {
-  const [selected, setSelected] = useState<string>(STEPS[0].id);
-  const active = STEPS.find((s) => s.id === selected) ?? STEPS[0];
+const stepTokens = (s: TraceStep) => s.tokensIn + s.tokensOut;
 
-  const totalTokens = STEPS.reduce((n, s) => n + s.tokensIn + s.tokensOut, 0);
-  const totalLatency = STEPS.reduce((n, s) => n + s.latencyMs, 0);
-  const totalCost = STEPS.reduce((n, s) => n + stepCost(s), 0);
+export default function AgentTrace() {
+  const reduced = usePrefersReducedMotion();
+
+  // How many steps have been revealed by the current run (0 = idle).
+  const [revealed, setRevealed] = useState(0);
+  // Whether a playback is currently in progress.
+  const [playing, setPlaying] = useState(false);
+  // The step whose raw payload is shown in the detail panel.
+  const [selected, setSelected] = useState<string | null>(null);
+  // Increments on every run so counters restart their animation.
+  const [runKey, setRunKey] = useState(0);
+
+  const timers = useRef<number[]>([]);
+  const clearTimers = useCallback(() => {
+    timers.current.forEach((t) => window.clearTimeout(t));
+    timers.current = [];
+  }, []);
+
+  useEffect(() => () => clearTimers(), [clearTimers]);
+
+  const play = useCallback(() => {
+    clearTimers();
+    setRunKey((k) => k + 1);
+    setSelected(null);
+    setPlaying(true);
+
+    if (reduced) {
+      setRevealed(STEPS.length);
+      setSelected(STEPS[STEPS.length - 1].id);
+      setPlaying(false);
+      return;
+    }
+
+    setRevealed(0);
+    STEPS.forEach((step, i) => {
+      const t = window.setTimeout(() => {
+        setRevealed(i + 1);
+        setSelected(step.id);
+        if (i === STEPS.length - 1) setPlaying(false);
+      }, 850 * (i + 1));
+      timers.current.push(t);
+    });
+  }, [clearTimers, reduced]);
+
+  const started = revealed > 0;
+  const done = revealed >= STEPS.length && !playing;
+
+  // Steps included in the live meters (only those revealed so far).
+  const shownSteps = STEPS.slice(0, revealed);
+  const targetTokens = shownSteps.reduce((n, s) => n + stepTokens(s), 0);
+  const targetLatency = shownSteps.reduce((n, s) => n + s.latencyMs, 0);
+  const targetCost = shownSteps.reduce((n, s) => n + stepCost(s), 0);
+
+  const liveTokens = useCountUp(targetTokens, playing, `${runKey}:${revealed}`, 650);
+  const liveLatency = useCountUp(targetLatency, playing, `${runKey}:${revealed}`, 650);
+  const liveCost = useCountUp(targetCost, playing, `${runKey}:${revealed}`, 650);
+
+  // Show settled values once the run completes so nothing looks mid-tween.
+  const tokensDisplay = playing ? Math.round(liveTokens) : targetTokens;
+  const latencyDisplay = playing ? liveLatency : targetLatency;
+  const costDisplay = playing ? liveCost : targetCost;
+
+  const active = STEPS.find((s) => s.id === selected) ?? null;
+  const answerStepRevealed = revealed >= STEPS.length;
+  const answerText = STEPS[STEPS.length - 1].raw.replace(/^assistant:\s*/, "");
+  const typed = useTypewriter(answerText, answerStepRevealed && !reduced, 12);
 
   return (
     <div className="rounded-xl border border-cream-dark bg-white shadow-sm overflow-hidden">
-      {/* Goal bar */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-cream-dark bg-cream-dark/40 px-4 py-3">
+      {/* Goal + transport bar */}
+      <div className="flex flex-wrap items-center gap-3 border-b border-cream-dark bg-cream-dark/40 px-4 py-3">
         <span className="text-[10px] font-mono uppercase tracking-widest text-slate-mid">
           Agent goal
         </span>
-        <span className="text-sm font-medium text-navy">{GOAL}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-navy">
+          {GOAL}
+        </span>
+        <button
+          type="button"
+          onClick={play}
+          className="inline-flex items-center gap-2 rounded-full bg-navy px-3.5 py-1.5 text-xs font-semibold text-white ring-1 ring-navy/10 transition-all hover:bg-navy-mid hover:-translate-y-px disabled:opacity-70"
+          disabled={playing}
+        >
+          {playing ? (
+            <>
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold opacity-70" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-gold" />
+              </span>
+              Running…
+            </>
+          ) : (
+            <>
+              <span aria-hidden>{done ? "↻" : "▶"}</span>
+              {done ? "Replay run" : "Run agent"}
+            </>
+          )}
+        </button>
       </div>
 
       <div className="grid gap-0 md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         {/* Timeline */}
-        <ol className="relative space-y-1 p-4">
+        <ol className="relative min-h-[220px] space-y-1 p-4">
           <span
             aria-hidden
             className="absolute left-[26px] top-6 bottom-6 w-px bg-cream-dark"
           />
+          {!started && (
+            <li className="flex h-full min-h-[188px] flex-col items-center justify-center gap-3 text-center">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-navy/5 text-navy ring-1 ring-navy/10">
+                ▶
+              </span>
+              <p className="max-w-[220px] text-sm text-slate-mid">
+                Press <span className="font-semibold text-navy">Run agent</span>{" "}
+                to watch the reason → act → observe loop unfold step by step.
+              </p>
+            </li>
+          )}
           {STEPS.map((s, i) => {
             const meta = KIND_META[s.kind];
+            const isShown = i < revealed;
+            if (!isShown) return null;
             const isActive = s.id === selected;
+            const isLatest = playing && i === revealed - 1;
             return (
-              <li key={s.id} className="relative">
+              <li
+                key={s.id}
+                className="relative"
+                style={{
+                  animation: reduced
+                    ? undefined
+                    : "rise-in 0.5s var(--ease-out-soft) both",
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => setSelected(s.id)}
@@ -163,7 +273,9 @@ export default function AgentTrace() {
                   }`}
                 >
                   <span
-                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ring-4 ring-white ${meta.dot}`}
+                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ring-4 ring-white ${meta.dot} ${
+                      isLatest ? "ring-gold/30" : ""
+                    }`}
                   >
                     {i + 1}
                   </span>
@@ -179,7 +291,7 @@ export default function AgentTrace() {
                       </span>
                     </span>
                     <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] font-mono text-slate-mid">
-                      <span>{s.tokensIn + s.tokensOut} tok</span>
+                      <span>{stepTokens(s)} tok</span>
                       <span>{s.latencyMs} ms</span>
                       <span>${stepCost(s).toFixed(4)}</span>
                     </span>
@@ -191,39 +303,64 @@ export default function AgentTrace() {
         </ol>
 
         {/* Detail panel */}
-        <div className="border-t border-cream-dark bg-navy p-4 md:border-l md:border-t-0">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ${KIND_META[active.kind].badge}`}
-            >
-              {KIND_META[active.kind].label}
-            </span>
-            <span className="text-[10px] font-mono text-white/40">
-              raw step payload
-            </span>
-          </div>
-          <p className="mb-3 text-sm text-white/70">{active.detail}</p>
-          <pre className="max-h-64 overflow-auto rounded-lg bg-black/30 p-3 text-[11px] leading-relaxed text-white/90 font-mono whitespace-pre-wrap ring-1 ring-white/10">
-            <code>{active.raw}</code>
-          </pre>
+        <div className="flex flex-col border-t border-cream-dark bg-navy p-4 md:border-l md:border-t-0">
+          {active ? (
+            <>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ${KIND_META[active.kind].badge}`}
+                >
+                  {KIND_META[active.kind].label}
+                </span>
+                <span className="text-[10px] font-mono text-white/40">
+                  raw step payload
+                </span>
+              </div>
+              <p className="mb-3 text-sm text-white/70">{active.detail}</p>
+              {active.kind === "answer" ? (
+                <div className="rounded-lg border border-gold/30 bg-white/5 p-3 ring-1 ring-white/10">
+                  <p className="mb-1 text-[10px] font-mono uppercase tracking-widest text-gold">
+                    Grounded answer
+                  </p>
+                  <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-white/90">
+                    {typed.shown}
+                    {!typed.done && (
+                      <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-px animate-pulse bg-gold align-middle" />
+                    )}
+                  </pre>
+                </div>
+              ) : (
+                <pre className="max-h-64 overflow-auto rounded-lg bg-black/30 p-3 text-[11px] leading-relaxed text-white/90 font-mono whitespace-pre-wrap ring-1 ring-white/10">
+                  <code>{active.raw}</code>
+                </pre>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-1 items-center justify-center text-center">
+              <p className="max-w-[240px] text-sm text-white/45">
+                The raw prompt, tool call, and observation for each step will
+                appear here as the agent runs.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Totals */}
       <dl className="grid grid-cols-3 divide-x divide-cream-dark border-t border-cream-dark">
         {[
-          { label: "Total tokens", value: totalTokens.toLocaleString() },
           {
-            label: "End-to-end",
-            value: `${(totalLatency / 1000).toFixed(1)} s`,
+            label: "Total tokens",
+            value: Math.round(tokensDisplay).toLocaleString(),
           },
-          { label: "Run cost", value: `$${totalCost.toFixed(4)}` },
+          { label: "End-to-end", value: `${(latencyDisplay / 1000).toFixed(1)} s` },
+          { label: "Run cost", value: `$${costDisplay.toFixed(4)}` },
         ].map((m) => (
           <div key={m.label} className="px-4 py-3 text-center">
             <dt className="text-[10px] uppercase tracking-widest text-slate-mid">
               {m.label}
             </dt>
-            <dd className="mt-0.5 font-serif text-lg font-semibold text-navy">
+            <dd className="mt-0.5 font-serif text-lg font-semibold tabular-nums text-navy">
               {m.value}
             </dd>
           </div>
