@@ -13,8 +13,12 @@ export default function HomePage() {
 
       <main className="flex-1">
         {/* ── Hero ──────────────────────────────────────────────────────── */}
-        <section className="bg-navy text-white py-20 px-6">
-          <div className="max-w-4xl mx-auto text-center">
+        <section className="relative bg-navy text-white py-20 px-6 overflow-hidden">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_rgba(176,133,64,0.12),_transparent_60%)]"
+          />
+          <div className="relative max-w-4xl mx-auto text-center">
             <p className="text-gold text-xs font-mono tracking-widest uppercase mb-4">
               Student Demo · AI-Powered SDLC
             </p>
@@ -32,7 +36,7 @@ export default function HomePage() {
             <div className="flex flex-wrap gap-4 justify-center">
               <Link
                 href="/stages/plan"
-                className="px-6 py-3 bg-navy-mid border border-gold/60 text-gold hover:bg-gold/10 rounded font-medium transition-colors"
+                className="px-6 py-3 bg-navy-mid border border-gold/60 text-gold hover:bg-gold/10 hover:shadow-lg rounded font-medium transition-all"
               >
                 Start the Demo →
               </Link>
@@ -80,7 +84,7 @@ export default function HomePage() {
               { value: totalTimeSaved, label: "Estimated Time Saved" },
               { value: "1 App", label: "Built End-to-End" },
             ].map(({ value, label }) => (
-              <div key={label} className="py-6 px-4 bg-white rounded-lg border border-cream-dark">
+              <div key={label} className="py-6 px-4 bg-white rounded-xl border border-cream-dark shadow-sm hover:shadow-md transition-shadow">
                 <p className="font-serif text-3xl font-semibold text-navy">{value}</p>
                 <p className="mt-1 text-sm text-slate-mid">{label}</p>
               </div>
