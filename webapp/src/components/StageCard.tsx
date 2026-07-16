@@ -42,7 +42,7 @@ export default function StageCard({ stage }: StageCardProps) {
   return (
     <Link
       href={`/stages/${stage.slug}`}
-      className="group flex flex-col gap-4 p-6 bg-white rounded-lg border border-cream-dark hover:border-navy/30 hover:shadow-md transition-all"
+      className="group flex flex-col gap-4 p-6 bg-white rounded-xl border border-cream-dark shadow-sm hover:border-navy/30 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
     >
       {/* Number + icon */}
       <div className="flex items-start justify-between">
@@ -56,7 +56,7 @@ export default function StageCard({ stage }: StageCardProps) {
 
       {/* Name + tagline */}
       <div>
-        <h3 className="font-serif text-xl font-semibold text-navy leading-tight">
+        <h3 className="font-serif text-xl font-semibold text-navy leading-tight group-hover:text-navy-mid transition-colors">
           {stage.name}
         </h3>
         <p className="mt-1.5 text-sm text-slate-mid leading-relaxed">
