@@ -189,7 +189,7 @@ export default async function StagePage({ params }: Props) {
             </p>
             <div aria-hidden className="rule-gold mx-auto mb-6 w-16" />
             <p className="font-serif text-xl sm:text-2xl leading-relaxed">
-              AI doesn&rsquo;t replace the {stage.name.toLowerCase()} work —
+              AI doesn&rsquo;t replace the work of {stage.name.toLowerCase()} —
               it compresses the time-to-quality by acting as an expert
               collaborator at your side throughout.
             </p>
