@@ -11,6 +11,11 @@ import type { Demo, Stage } from "./types";
 import { aiSdlcDemo } from "./ai-sdlc";
 import { deploymentPatternsDemo } from "./deployment-patterns";
 import { aiObservabilityDemo } from "./ai-observability";
+import { ragExplorerDemo } from "./rag-explorer";
+import { agenticPlaygroundDemo } from "./agentic-playground";
+import { mcpInActionDemo } from "./mcp-in-action";
+import { skillsLibraryDemo } from "./skills-library";
+import { multiAgentDemo } from "./multi-agent";
 
 export type { ContentBlock, Stage, Demo, DemoStatus, WidgetKey } from "./types";
 
@@ -18,6 +23,11 @@ export const demos: Demo[] = [
   aiSdlcDemo,
   deploymentPatternsDemo,
   aiObservabilityDemo,
+  ragExplorerDemo,
+  agenticPlaygroundDemo,
+  mcpInActionDemo,
+  skillsLibraryDemo,
+  multiAgentDemo,
 ];
 
 /** Demos that are ready to explore (have stages). */
